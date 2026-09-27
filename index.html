@@ -1377,6 +1377,28 @@ const slideState = {}; // unitId -> {i: currentSlideIndex}
 // وإن لم تكن متوفرة (عند فتح الملف مباشرة أو استضافته على أي موقع خاص)
 // يتحول التخزين تلقائياً إلى localStorage الخاص بالمتصفح، بنفس الواجهة (get/set/delete/list)
 // حتى يستمر حفظ نتائج الاختبارات وتصديرها في العمل في كل الحالات.
+// رابط تطبيق الويب (Google Apps Script) المرتبط بملف Google Sheets
+// لتجميع نتائج جميع الطلاب تلقائيًا في مكان واحد
+const SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzupGE-vwN0V-BGZ2l3y-4w0oQW8hpCBxp8MzwE9IgHLj5TwSgzbunDAEls5RhINmPD/exec";
+
+function sendToSheet(record){
+  if(!SHEET_WEBHOOK_URL) return;
+  try{
+    fetch(SHEET_WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'no-cors', // تطبيقات Google Apps Script لا تدعم CORS القياسي، ولا نحتاج قراءة الرد
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        name: record.name,
+        studentId: record.studentId,
+        unit: record.unitTitle,
+        score: `${record.score}/${record.total}`,
+        percentage: record.pct
+      })
+    });
+  }catch(e){ console.error("sheet webhook error", e); }
+}
+
 const HAS_CLAUDE_STORAGE = (typeof window.storage !== 'undefined' && !!window.storage);
 const Store = HAS_CLAUDE_STORAGE ? window.storage : {
   async set(key, value){
@@ -1697,6 +1719,9 @@ async function submitQuiz(uid){
     const key = `result:${uid}:${sid}:${Date.now()}`;
     await Store.set(key, JSON.stringify(record), true);
   }catch(e){ console.error("storage error", e); }
+
+  // إرسال نسخة تلقائية إلى ملف Google Sheets المركزي
+  sendToSheet(record);
 
   showResult(uid, record);
   refreshProgressBadges();
