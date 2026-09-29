@@ -58,11 +58,27 @@ button{font-family:inherit;cursor:pointer;}
 }
 #topbar .brand-mark svg{width:20px;height:20px;}
 #topbar .brand-text .t1{font-family:'Cairo';font-weight:800;font-size:15.5px;color:#fff;letter-spacing:.2px;}
-#results-topbtn{
+#results-topbtn,#exams-topbtn{
   display:flex;align-items:center;gap:8px;color:#c9d6de;text-decoration:none;font-size:13px;font-weight:700;
   padding:8px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.15);transition:background .15s,color .15s;
 }
-#results-topbtn:hover{background:rgba(255,255,255,.08);color:#fff;}
+#results-topbtn:hover,#exams-topbtn:hover{background:rgba(255,255,255,.08);color:#fff;}
+
+.exam-lock-card{
+  background:#fff;border:1px solid #e7ded2;border-radius:16px;padding:22px 24px;margin-bottom:18px;
+}
+.exam-lock-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.exam-lock-head .ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.exam-lock-head h3{font-family:'Cairo';font-weight:800;font-size:17px;color:#20140a;margin:0;}
+.exam-lock-card p{color:#5c5347;font-size:14.5px;line-height:1.8;margin:0 0 14px;}
+.exam-lock-form{display:flex;gap:10px;flex-wrap:wrap;}
+.exam-lock-form input{
+  flex:1;min-width:180px;padding:11px 14px;border-radius:9px;border:1.5px solid #ddd2c0;font-size:14.5px;font-family:'Cairo';
+}
+.exam-unlocked{margin-bottom:22px;}
+@media(max-width:480px){
+  #exams-topbtn span{display:none;}
+}
 
 /* main */
 #main{flex:1;min-width:0;width:100%;}
@@ -496,7 +512,10 @@ table tr:nth-child(even) td{background:#f8f9f4;}
     <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#20140a" stroke-width="2"><path d="M12 2 3 6v6c0 5 4 8 9 10 5-2 9-5 9-10V6l-9-4Z"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="brand-text"><div class="t1">السلامة الصناعية</div></div>
   </a>
-  <a href="#" id="results-topbtn" onclick="goTo('results');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg><span>سجل النتائج</span></a>
+  <div style="display:flex;align-items:center;gap:8px">
+    <a href="#" id="exams-topbtn" onclick="goTo('exams');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>نماذج اختبارات</span></a>
+    <a href="#" id="results-topbtn" onclick="goTo('results');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg><span>سجل النتائج</span></a>
+  </div>
 </div>
 
 <div id="app">
@@ -1358,6 +1377,86 @@ quiz:[
 ]
 };
 
+const EXAM1 = {
+  id:"exam1", num:1, title:"نموذج الاختبار الأول", code:"SAFETY-EXAM1", isExam:true,
+  quiz:[
+{type:"mcq",q:"ما تعريف علم السلامة؟",opts:["العلم الذي يسعى لحماية الإنسان من المخاطر والأضرار ومنع الخسائر في الممتلكات","العلم الذي يهتم بزيادة سرعة الإنتاج فقط","علم يقتصر على تصميم المباني","علم يخص المحاسبة المالية للمنشأة"],a:0},
+{type:"mcq",q:"الصحة المهنية هي العلم الذي يهتم بـ:",opts:["زيادة إنتاجية العامل فقط","التعرّف والتقييم والسيطرة على ظروف العمل الخطرة","تصميم المباني الإدارية","تسويق منتجات المصنع"],a:1},
+{type:"mcq",q:"الخطوة الأولى قبل تحديد معدات الوقاية الشخصية المطلوبة هي:",opts:["شراء أرخص المعدات المتوفرة","تحديد نوع المخاطر في مكان العمل","تدريب العامل فوراً","تخزين المعدات في المستودع"],a:1},
+{type:"mcq",q:"عند استخدام مفتاح الصواميل بدلاً من المطرقة، فهذا مثال على:",opts:["استخدام سليم للعدة","استخدام عدة غير مناسبة للعمل","إجراء وقائي جيد","توصية معتمدة من الأوشا"],a:1},
+{type:"mcq",q:"من أسباب الإصابة بالتيار الكهربائي في مرحلة الاستخدام:",opts:["استخدام مهندس كهرباء متخصص للتصميم","توصيل عدة أجهزة كهربائية بمقبس واحد في نفس الوقت","تركيب موصل تأريض في جميع الدوائر","اتباع المخططات الكهربائية بدقة"],a:1},
+{type:"mcq",q:"ما عناصر هرم الاشتعال الأربعة؟",opts:["الوقود، الهواء، الحرارة، التفاعل الكيميائي المتسلسل","الماء، الهواء، الرمل، البودرة","الحرارة فقط والضوء","الكهرباء والمعادن فقط"],a:0},
+{type:"mcq",q:"ما الغرض من تأريض الأجزاء المعدنية غير الحاملة للتيار؟",opts:["تحسين المظهر الخارجي للمعدة","تقليل استهلاك الطاقة","توفير طريق أمان لتيار القصر عند حدوث عطل بالعزل","زيادة سرعة دوران المحرك"],a:2},
+{type:"mcq",q:"مهمات الوقاية الشخصية (PPE) في هرم السيطرة تُعتبر:",opts:["الحل الأول والأكثر فعالية","آخر خط دفاع بعد استنفاذ الحلول الأخرى","غير ضرورية إطلاقاً","بديلاً عن التحكم الهندسي دائماً"],a:1},
+{type:"tf",q:"يجوز لأي عامل غير متخصص تركيب أو فحص أو إصلاح المعدات الكهربائية دون قيد.",a:false},
+{type:"tf",q:"الاستنشاق هو أسرع طريق لدخول المواد الكيميائية الضارة إلى جسم الإنسان.",a:true},
+{type:"tf",q:"الخوذة من الدرجة C (الألمنيوم) توفر حماية كهربائية جيدة.",a:false},
+{type:"tf",q:"يجوز حمل العدد الحادة في جيوب الملابس دون جراب واقٍ.",a:false},
+{type:"tf",q:"الجهد بين 24 و50 فولت يُعتبر آمناً نسبياً على الإنسان ضمن شروط معينة.",a:true},
+{type:"tf",q:"يتكون نظام الإنذار الكهربائي (الآلي) من خمسة عناصر رئيسة تشمل وحدة التحكم وكاشفات الحريق.",a:true},
+{type:"fill",q:"يُعنى علم ______ بحماية الإنسان من المخاطر ومنع الخسائر في الممتلكات.",a:["السلامة"]},
+{type:"fill",q:"الملوثات الصلبة الدقيقة جداً (أقل من ميكرون واحد) الناتجة من تكثيف أبخرة المعادن المنصهرة تسمى ______.",a:["الأدخنة","ادخنة","fumes"]},
+{type:"fill",q:"تُستخدم أغطية الأذن (Ear Muffs) بدل السدادات عندما تكون شدة الضوضاء ______ جداً.",a:["مرتفعة","عالية"]},
+{type:"fill",q:"يجب ثبيت القطعة المراد العمل عليها على طاولة، ولا يجوز ______ في اليد أثناء العمل عليها.",a:["إمساكها","مسكها","حملها"]},
+{type:"fill",q:"جهد التشغيل الآمن نسبياً للإنسان يقع بين 24 و______ فولت.",a:["50","خمسين"]},
+{type:"fill",q:"حريق ناتج عن مواد صلبة عادية كالخشب والورق يُصنَّف من النوع ______.",a:["A"]}
+  ]
+};
+
+const EXAM2 = {
+  id:"exam2", num:2, title:"نموذج الاختبار الثاني", code:"SAFETY-EXAM2", isExam:true,
+  quiz:[
+{type:"mcq",q:"كم عدد أهداف السلامة الرئيسة؟",opts:["اثنان","ثلاثة (إنسانية، اقتصادية، صحية)","أربعة","خمسة"],a:1},
+{type:"mcq",q:"ما أسرع طريق لدخول المواد الكيميائية الضارة إلى جسم الإنسان؟",opts:["البلع","الحقن الخاطئ","الاستنشاق","الامتصاص من الملابس"],a:2},
+{type:"mcq",q:"أي درجة من خوذات السلامة توفر أعلى حماية كهربائية؟",opts:["الدرجة أ","الدرجة ب","الدرجة ج (الألمنيوم)","لا فرق بين الدرجات"],a:1},
+{type:"mcq",q:"عند العمل على الأجهزة الكهربائية، يجب استخدام عدد ذات:",opts:["مقابض معدنية موصلة","مقابض معزولة","لا فرق في نوع المقبض","مقابض من الزجاج"],a:1},
+{type:"mcq",q:"ما التأثير المتوقع لتيار بشدة تتراوح بين 50 و100 ملي أمبير على جسم الإنسان؟",opts:["لا يشعر به الإنسان مطلقاً","تقلص غير مؤلم يمكن التخلص منه بسهولة","اختلال في وظيفة القلب وقد يؤدي للوفاة","يسبب فقط دوخة خفيفة"],a:2},
+{type:"mcq",q:"حريق ناتج عن معدات وأجهزة كهربائية يُصنَّف من النوع:",opts:["A","B","C","D"],a:2},
+{type:"mcq",q:"في فحص الضغط السالب لقناع التنفس، الجهاز يكون مربوطاً جيداً إذا:",opts:["انتفخ القناع للخارج بشكل كامل","بقي القناع منبعجاً للداخل بعد التوقف عن التنفس لعشر ثوانٍ","خرج صوت صفير عالٍ","لم يحدث أي تغيير في شكل القناع"],a:1},
+{type:"mcq",q:"من الأخطاء الشائعة عند استخدام العدد اليدوية:",opts:["فحص العدة قبل الاستخدام","استخدام سكين وجذبه نحو الجسم أثناء القطع","تخزين العدد بحالة نظيفة بعد الاستعمال","استخدام العدة المناسبة لحجم العمل"],a:1},
+{type:"tf",q:"الهدف الاقتصادي للسلامة يتعلق بحماية المنشآت والممتلكات التي تشكل قيماً اقتصادية.",a:true},
+{type:"tf",q:"الأدخنة (Fumes) أكبر حجماً من الأتربة (Dusts) في العادة.",a:false},
+{type:"tf",q:"الحد الأقصى المسموح للتعرض للضوضاء دون حماية طوال يوم العمل (8 ساعات) هو 90 ديسيبل.",a:true},
+{type:"tf",q:"يجب تأريض العدد الكهربائية اليدوية والتأكد من وجود مفتاح تشغيل وإيقاف بها.",a:true},
+{type:"tf",q:"مسار «يد إلى يد» يُعد أخطر من «قدم إلى قدم» لأنه يعبر منطقة القلب مباشرة.",a:true},
+{type:"tf",q:"الكاشفات الدخانية الأيونية تعتمد على مبدأ تغيّر التيار عند دخول جزيئات الدخان لغرفة التأين.",a:true},
+{type:"fill",q:"الأهداف الثلاثة للسلامة هي: إنسانية، اقتصادية، و______.",a:["صحية"]},
+{type:"fill",q:"أول خطوة في هرم السيطرة على المخاطر هي ______ الكاملة لمصدر الخطر.",a:["الإزالة","ازاله"]},
+{type:"fill",q:"نوع أجهزة التنفس الذي يحتوي أسطوانة هواء مضغوط على الظهر يسمى جهاز التنفس ______.",a:["الذاتي","SCBA"]},
+{type:"fill",q:"إصابة القطع تسببها المناشير وماكينات ______ المعادن والفريزة.",a:["تشكيل"]},
+{type:"fill",q:"من مراحل نشوء أخطاء الكهرباء: مرحلة التصميم، مرحلة التنفيذ، ومرحلة ______.",a:["الاستخدام"]},
+{type:"fill",q:"طريقة الإطفاء التي تعتمد على إزالة الوقود عن الحريق تسمى ______ الحريق.",a:["تجويع"]}
+  ]
+};
+
+const EXAM3 = {
+  id:"exam3", num:3, title:"نموذج الاختبار الثالث", code:"SAFETY-EXAM3", isExam:true,
+  quiz:[
+{type:"mcq",q:"كم عدد المبادئ الأساسية للسلامة العامة؟",opts:["ثلاثة","أربعة","خمسة","سبعة"],a:2},
+{type:"mcq",q:"الأتربة التي يقل قطرها عن 10 ميكرون تسمى وتكون خطيرة لأنها:",opts:["أتربة غير مستنشقة، وتترسب على الملابس","أتربة مستنشقة، وقد تترسب في الحويصلات الهوائية بالرئتين","أتربة ثقيلة، وتسقط فوراً على الأرض","غير قابلة للاستنشاق مطلقاً"],a:1},
+{type:"mcq",q:"يجب على العامل ارتداء واقيات الأذن إذا كانت شدة الضوضاء تزيد عن:",opts:["40 ديسيبل","60 ديسيبل","85 ديسيبل","200 ديسيبل"],a:2},
+{type:"mcq",q:"انحشار الشعر الطويل أو الملابس الفضفاضة في جزء دوار من المعدة يُصنَّف كإصابة:",opts:["قطع","انحشار","احتكاك وتسلخ","مقذوفات"],a:1},
+{type:"mcq",q:"أي مسار لمرور التيار في جسم الإنسان يُعد الأخطر؟",opts:["قدم إلى قدم","يد إلى قدمين (يعبر منطقة القلب)","رأس إلى قدم فقط","لا فرق بين المسارات"],a:1},
+{type:"mcq",q:"لماذا يُمنع استخدام الماء في إطفاء حرائق النوع C؟",opts:["الماء غالي الثمن","الماء موصل جيد للكهرباء وقد يصعق مستخدم الطفاية","الماء يزيد اللهب اشتعالاً دائماً","لا يوجد سبب حقيقي"],a:1},
+{type:"mcq",q:"نظام العزل والإغلاق (Lockout/Tagout) يهدف أساساً إلى:",opts:["زيادة سرعة الإصلاح دون احتياطات","منع إعادة تشغيل المعدة أثناء الصيانة لحماية العامل من مصادر الطاقة المتبقية","تزيين لوحة التحكم","تقليل تكلفة الصيانة فقط"],a:1},
+{type:"mcq",q:"مادة البالون (Halon) تم تقليص استخدامها بسبب:",opts:["ارتفاع سعرها فقط","تأثيرها الضار على طبقة الأوزون","ضعف فعاليتها في الإطفاء","صعوبة تصنيعها"],a:1},
+{type:"tf",q:"لا حاجة لفحص المعدات الجديدة قبل وضعها في الخدمة لأول مرة لأنها جديدة وسليمة بالضرورة.",a:false},
+{type:"tf",q:"في هرم السيطرة على المخاطر، تُفضَّل مهمات الوقاية الشخصية على الإزالة الكاملة لمصدر الخطر.",a:false},
+{type:"tf",q:"أجهزة التنفس المنقية للهواء تزوّد العامل بالأوكسجين مثل أجهزة SCBA.",a:false},
+{type:"tf",q:"نقاط الالتقاء الخطرة (Nip Points) تحدث فقط بين السلسلة والترس، ولا تحدث بين ترسين متشابكين.",a:false},
+{type:"tf",q:"يجوز إعادة تشغيل معدة موصولة بلافتة عزل من أي عامل دون تصريح.",a:false},
+{type:"tf",q:"حريق زيت الطبخ (Class K) يُطفأ بالطريقة نفسها المستخدمة لحريق الأخشاب (Class A).",a:false},
+{type:"fill",q:"أول مبادئ السلامة الخمسة هو قوة ______ الفاعلة.",a:["الإدارة"]},
+{type:"fill",q:"مصانع النسيج وحلج الأقطان تُصنَّف ضمن التصنيف ______ من المناطق الخطرة.",a:["الثالث"]},
+{type:"fill",q:"اللون ______ في لوحات الأنابيب يشير إلى مواد إطفاء الحريق مع كتابة بيضاء.",a:["الأحمر"]},
+{type:"fill",q:"الحاجز الذي يعدّل نفسه تلقائياً حسب حجم الشغلة يسمى الحاجز ______ التعديل.",a:["ذاتي"]},
+{type:"fill",q:"عند توقف قلب المصاب، يتناوب المسعفان: أحدهما بالتنفس الاصطناعي والآخر ب______ القلب الخارجي.",a:["تدليك"]},
+{type:"fill",q:"الحرف الثالث من طريقة PASS يرمز إلى كلمة Squeeze، أي ______ المقبض.",a:["الضغط على","ضغط"]}
+  ]
+};
+
+const EXAMS = [EXAM1, EXAM2, EXAM3];
+
 const UNITS = [UNIT1, UNIT2, UNIT3, UNIT4, UNIT5, UNIT6];
 
 
@@ -1371,6 +1470,7 @@ const UNITS = [UNIT1, UNIT2, UNIT3, UNIT4, UNIT5, UNIT6];
 let currentPage = "home";
 const quizState = {}; // unitId -> {answers:{}, submitted:false}
 const slideState = {}; // unitId -> {i: currentSlideIndex}
+const examState = {}; // examId -> {unlocked:false}
 
 // ---------- طبقة تخزين مرنة (تعمل داخل بيئة Claude وخارجها على أي استضافة) ----------
 // إن كانت واجهة window.storage متوفرة (داخل بيئة Claude) تُستخدم مباشرة.
@@ -1604,7 +1704,7 @@ function renderQuiz(u){
 
   return `
   <div class="quiz-wrap" id="quiz-${u.id}">
-    <div class="quiz-head"><div class="ic">${ICONS.book}</div><h2>اختبار الوحدة ${arabicOrdinal(u.num)}</h2></div>
+    <div class="quiz-head"><div class="ic">${ICONS.book}</div><h2>${u.isExam ? u.title : ('اختبار الوحدة ' + arabicOrdinal(u.num))}</h2></div>
     <p class="quiz-sub">أدخل اسمك ورقمك الأكاديمي، ثم أجب عن جميع الأسئلة (اختيار من متعدد، صواب وخطأ، وإكمال الفراغ). تُحفظ نتيجتك تلقائياً بعد الإرسال، ويمكن تصديرها إلى إكسل من صفحة سجل النتائج.</p>
 
     <div id="quiz-form-${u.id}">
@@ -1668,8 +1768,12 @@ function isAnswered(uid, qi){
   return true;
 }
 
+function findQuizItem(uid){
+  return UNITS.find(x=>x.id===uid) || EXAMS.find(x=>x.id===uid);
+}
+
 async function submitQuiz(uid){
-  const u = UNITS.find(x=>x.id===uid);
+  const u = findQuizItem(uid);
   const name = document.getElementById(`name-${uid}`).value.trim();
   const sid = document.getElementById(`sid-${uid}`).value.trim();
   const msg = document.getElementById(`msg-${uid}`);
@@ -1725,6 +1829,57 @@ async function submitQuiz(uid){
 
   showResult(uid, record);
   refreshProgressBadges();
+}
+
+// ---------- نماذج الاختبارات الإضافية (محمية برقم سري) ----------
+function renderExamsPage(){
+  return `
+  <div class="wrap">
+    <div class="unit-head" style="margin-bottom:22px">
+      <div class="ic" style="background:#20140a"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+      <div><div class="uh-kicker">تقييم إضافي</div><h1 class="uh-title">نماذج اختبارات منوّعة</h1></div>
+    </div>
+    <p class="quiz-sub" style="margin-bottom:20px">ثلاثة نماذج اختبار منوّعة (20 سؤالاً لكل نموذج، تغطي محتوى جميع الوحدات). كل نموذج محمي برقم سري خاص يُعطى من المدرب المسؤول فقط.</p>
+    <div id="exams-list">
+      ${EXAMS.map(ex=>renderExamBlock(ex)).join('')}
+    </div>
+  </div>`;
+}
+
+function renderExamBlock(ex){
+  const st = examState[ex.id];
+  if(!st || !st.unlocked){
+    return `
+    <div class="exam-lock-card" id="examcard-${ex.id}">
+      <div class="exam-lock-head">
+        <div class="ic" style="background:#3a2a14"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+        <h3>${ex.title}</h3>
+      </div>
+      <p>هذا النموذج مغلق. أدخل الرقم السري لفتحه والبدء بالإجابة على 20 سؤالاً منوّعاً.</p>
+      <div class="exam-lock-form">
+        <input type="password" id="examcode-${ex.id}" placeholder="أدخل الرقم السري" onkeydown="if(event.key==='Enter')unlockExam('${ex.id}')">
+        <button class="btn primary" onclick="unlockExam('${ex.id}')">دخول</button>
+      </div>
+      <div class="quiz-msg" id="examcodemsg-${ex.id}"></div>
+    </div>`;
+  }
+  return `<div class="exam-unlocked" id="examcard-${ex.id}">${renderQuiz(ex)}</div>`;
+}
+
+function unlockExam(examId){
+  const ex = EXAMS.find(e=>e.id===examId);
+  const input = document.getElementById(`examcode-${examId}`);
+  const msg = document.getElementById(`examcodemsg-${examId}`);
+  if(!ex) return;
+  if(input.value.trim() === ex.code){
+    examState[examId] = {unlocked:true};
+    const card = document.getElementById(`examcard-${examId}`);
+    card.outerHTML = `<div class="exam-unlocked" id="examcard-${examId}">${renderQuiz(ex)}</div>`;
+    const st2 = quizState[examId];
+    if(st2 && st2.submitted && st2.result){ showResult(examId, st2.result); }
+  } else {
+    msg.textContent = "الرقم السري غير صحيح. تأكد من الرقم مع المدرب المسؤول.";
+  }
 }
 
 function renderReview(uid){
@@ -2006,6 +2161,10 @@ function renderPage(page){
   const pages = document.getElementById('pages');
   if(page==='home'){
     ensurePageDiv('home', renderHome());
+  } else if(page==='exams'){
+    if(!document.getElementById('page-exams')){
+      ensurePageDiv('exams', renderExamsPage());
+    }
   } else if(page==='results'){
     if(!document.getElementById('page-results')){
       if(resultsUnlocked){ renderResults(); } else { renderResultsLock(); }
