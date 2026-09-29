@@ -58,11 +58,11 @@ button{font-family:inherit;cursor:pointer;}
 }
 #topbar .brand-mark svg{width:20px;height:20px;}
 #topbar .brand-text .t1{font-family:'Cairo';font-weight:800;font-size:15.5px;color:#fff;letter-spacing:.2px;}
-#results-topbtn,#exams-topbtn{
+#results-topbtn,#exams-topbtn,#admin-topbtn{
   display:flex;align-items:center;gap:8px;color:#c9d6de;text-decoration:none;font-size:13px;font-weight:700;
   padding:8px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.15);transition:background .15s,color .15s;
 }
-#results-topbtn:hover,#exams-topbtn:hover{background:rgba(255,255,255,.08);color:#fff;}
+#results-topbtn:hover,#exams-topbtn:hover,#admin-topbtn:hover{background:rgba(255,255,255,.08);color:#fff;}
 
 .exam-lock-card{
   background:#fff;border:1px solid #e7ded2;border-radius:16px;padding:22px 24px;margin-bottom:18px;
@@ -77,7 +77,7 @@ button{font-family:inherit;cursor:pointer;}
 }
 .exam-unlocked{margin-bottom:22px;}
 @media(max-width:480px){
-  #exams-topbtn span{display:none;}
+  #exams-topbtn span,#admin-topbtn span{display:none;}
 }
 
 /* main */
@@ -515,6 +515,7 @@ table tr:nth-child(even) td{background:#f8f9f4;}
   <div style="display:flex;align-items:center;gap:8px">
     <a href="#" id="exams-topbtn" onclick="goTo('exams');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>نماذج اختبارات</span></a>
     <a href="#" id="results-topbtn" onclick="goTo('results');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg><span>سجل النتائج</span></a>
+    <a href="#" id="admin-topbtn" onclick="goTo('admin');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg><span>لوحة المدرب</span></a>
   </div>
 </div>
 
@@ -1481,6 +1482,10 @@ const examState = {}; // examId -> {unlocked:false}
 // لتجميع نتائج جميع الطلاب تلقائيًا في مكان واحد
 const SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzupGE-vwN0V-BGZ2l3y-4w0oQW8hpCBxp8MzwE9IgHLj5TwSgzbunDAEls5RhINmPD/exec";
 
+// رمز دخول لوحة المدرب — يجب أن يطابق تمامًا القيمة ADMIN_KEY في كود Google Apps Script
+// يمكن للمدرب تغييره لاحقًا (بتغييره هنا وفي كود Apps Script معًا)
+const ADMIN_PANEL_KEY = "TRAINER-2026";
+
 function sendToSheet(record){
   if(!SHEET_WEBHOOK_URL) return;
   try{
@@ -1497,6 +1502,58 @@ function sendToSheet(record){
       })
     });
   }catch(e){ console.error("sheet webhook error", e); }
+}
+
+// ---------- مزامنة الأسئلة المضافة/المعدّلة من لوحة المدرب (تظهر لجميع الزوار) ----------
+// كل سؤال أصلي في بنك الأسئلة يحصل على معرّف ثابت بحسب موضعه: quizId-q{index}
+// أي إضافة/تعديل/حذف يقوم به المدرب يُحفظ في ورقة "Questions" بملف الشيت
+// وتتم مزامنته مع الموقع لكل زائر عند تحميل الصفحة.
+function mergeQuestions(quizId, baseArr, overrideRows){
+  const baseWithIds = baseArr.map((q,i)=>({...q, _id:`${quizId}-q${i}`, _custom:false}));
+  const overridesById = {};
+  const customAdds = [];
+  (overrideRows||[]).forEach(r=>{
+    if(r.id && r.id.indexOf(`${quizId}-q`)===0){ overridesById[r.id] = r; }
+    else { customAdds.push(r); }
+  });
+  let result = baseWithIds
+    .filter(q => !(overridesById[q._id] && overridesById[q._id].deleted))
+    .map(q => {
+      const ov = overridesById[q._id];
+      if(ov && !ov.deleted){
+        return {type: ov.type, q: ov.q, opts: ov.opts || undefined, a: ov.a, _id: q._id, _custom:false};
+      }
+      return q;
+    });
+  customAdds.filter(r=>!r.deleted).forEach(r=>{
+    result.push({type:r.type, q:r.q, opts:r.opts||undefined, a:r.a, _id:r.id, _custom:true});
+  });
+  return result;
+}
+
+let lastQuestionOverrides = {}; // quizId -> rows[] (يُستخدم في تحديث لوحة المدرب فوراً بعد الحفظ)
+let ORIGINAL_QUIZZES = null; // نسخة أصلية ثابتة من كل بنك أسئلة، لا تُعدَّل أبداً، تُستخدم كأساس لكل عملية مزامنة
+
+function ensureOriginalQuizzesCaptured(){
+  if(ORIGINAL_QUIZZES) return;
+  ORIGINAL_QUIZZES = {};
+  [...UNITS, ...EXAMS].forEach(item=>{ ORIGINAL_QUIZZES[item.id] = JSON.parse(JSON.stringify(item.quiz)); });
+}
+
+async function loadAllQuestionOverrides(){
+  if(!SHEET_WEBHOOK_URL) return;
+  ensureOriginalQuizzesCaptured();
+  try{
+    const res = await fetch(`${SHEET_WEBHOOK_URL}?action=questions`);
+    const data = await res.json();
+    const rows = data.rows || [];
+    const byQuiz = {};
+    rows.forEach(r=>{ (byQuiz[r.quizId] = byQuiz[r.quizId]||[]).push(r); });
+    lastQuestionOverrides = byQuiz;
+    [...UNITS, ...EXAMS].forEach(item=>{
+      item.quiz = mergeQuestions(item.id, ORIGINAL_QUIZZES[item.id], byQuiz[item.id]||[]);
+    });
+  }catch(e){ console.error("question sync failed", e); }
 }
 
 const HAS_CLAUDE_STORAGE = (typeof window.storage !== 'undefined' && !!window.storage);
@@ -1882,6 +1939,245 @@ function unlockExam(examId){
   }
 }
 
+// ---------- لوحة المدرب: إضافة/تعديل/حذف أسئلة أي وحدة أو نموذج اختبار ----------
+let trainerUnlocked = false;
+let adminSelectedQuiz = null;
+
+function renderTrainerLockHtml(){
+  return `
+  <div class="wrap" style="max-width:480px">
+    <div class="unit-head" style="margin-bottom:18px">
+      <div class="ic" style="background:#20140a"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+      <div><div class="uh-kicker">لوحة المدرب</div><h1 class="uh-title">دخول محمي</h1></div>
+    </div>
+    <p class="quiz-sub">هذه الصفحة مخصصة للمدرب المسؤول عن إدارة أسئلة الوحدات ونماذج الاختبارات. أدخل رمز الدخول الخاص بك.</p>
+    <div class="exam-lock-form">
+      <input type="password" id="trainer-key-input" placeholder="رمز دخول المدرب" onkeydown="if(event.key==='Enter')checkTrainerKey()">
+      <button class="btn primary" onclick="checkTrainerKey()">دخول</button>
+    </div>
+    <div class="quiz-msg" id="trainer-key-msg"></div>
+  </div>`;
+}
+
+function checkTrainerKey(){
+  const val = document.getElementById('trainer-key-input').value.trim();
+  if(val === ADMIN_PANEL_KEY){
+    trainerUnlocked = true;
+    goTo('admin', true);
+  } else {
+    document.getElementById('trainer-key-msg').textContent = "رمز الدخول غير صحيح.";
+  }
+}
+
+function allQuizzableItems(){ return [...UNITS, ...EXAMS]; }
+
+function renderTrainerPanelHtml(){
+  if(!adminSelectedQuiz) adminSelectedQuiz = UNITS[0].id;
+  const options = allQuizzableItems().map(item=>{
+    const label = item.isExam ? item.title : `الوحدة ${item.num}: ${item.title}`;
+    return `<option value="${item.id}" ${item.id===adminSelectedQuiz?'selected':''}>${label}</option>`;
+  }).join('');
+  return `
+  <div class="wrap">
+    <div class="unit-head" style="margin-bottom:18px">
+      <div class="ic" style="background:#20140a"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+      <div><div class="uh-kicker">لوحة المدرب</div><h1 class="uh-title">إدارة أسئلة الاختبارات</h1></div>
+    </div>
+    <p class="quiz-sub">أضف أو عدّل أو احذف أي سؤال في أي وحدة أو نموذج اختبار. تُحفظ التغييرات في ملف Google Sheets وتظهر تلقائياً لجميع من يفتح الموقع خلال ثوانٍ.</p>
+
+    <div class="stu-form" style="margin-bottom:16px">
+      <div class="stu-field" style="flex:1">
+        <label>اختر الوحدة أو نموذج الاختبار</label>
+        <select id="admin-quiz-select" onchange="onAdminQuizChange()">${options}</select>
+      </div>
+    </div>
+
+    <div class="quiz-actions" style="margin-bottom:14px">
+      <button class="btn primary" onclick="showAdminQuestionForm()">+ إضافة سؤال جديد</button>
+      <button class="btn dark" onclick="refreshAdminPanel()">تحديث القائمة</button>
+      <span class="quiz-msg" id="admin-msg"></span>
+    </div>
+
+    <div id="admin-form-container"></div>
+    <div id="admin-question-list">${renderAdminQuestionListHtml(adminSelectedQuiz)}</div>
+  </div>`;
+}
+
+function onAdminQuizChange(){
+  adminSelectedQuiz = document.getElementById('admin-quiz-select').value;
+  document.getElementById('admin-form-container').innerHTML = '';
+  document.getElementById('admin-question-list').innerHTML = renderAdminQuestionListHtml(adminSelectedQuiz);
+}
+
+async function refreshAdminPanel(){
+  const msg = document.getElementById('admin-msg');
+  msg.textContent = "جارٍ التحديث...";
+  await loadAllQuestionOverrides();
+  document.getElementById('admin-question-list').innerHTML = renderAdminQuestionListHtml(adminSelectedQuiz);
+  msg.textContent = "تم التحديث.";
+  setTimeout(()=>{ if(msg) msg.textContent=''; }, 2000);
+}
+
+function renderAdminQuestionListHtml(quizId){
+  const item = findQuizItem(quizId);
+  if(!item) return '';
+  const typeLabel = q => q.type==='tf' ? 'صواب/خطأ' : q.type==='fill' ? 'إكمال فراغ' : 'اختيار من متعدد';
+  return item.quiz.map((q,i)=>`
+    <div class="q-block">
+      <div class="q-num">${i+1}. <span class="q-type-tag">${typeLabel(q)}</span> ${q._custom?'<span class="q-type-tag" style="background:#e8f5e9;color:#1b5e20">مضاف من المدرب</span>':''}</div>
+      <div class="q-text">${escapeHtml(q.q)}</div>
+      ${q.type==='mcq' ? `<div class="opt-list">${q.opts.map((op,oi)=>`<div class="opt ${oi===q.a?'picked':''}"><span>${oi===q.a?'✓ ':''}${escapeHtml(op)}</span></div>`).join('')}</div>` : ''}
+      ${q.type==='tf' ? `<div class="opt-list"><div class="opt ${q.a?'picked':''}"><span>✓ صحيح</span></div><div class="opt ${!q.a?'picked':''}"><span>✗ خطأ</span></div></div>` : ''}
+      ${q.type==='fill' ? `<div class="fill-wrap"><em>الإجابات المقبولة: ${q.a.map(escapeHtml).join('، ')}</em></div>` : ''}
+      <div class="quiz-actions" style="margin-top:10px">
+        <button class="btn dark" onclick='showAdminQuestionForm(${JSON.stringify(q._id)})'>تعديل</button>
+        <button class="btn" style="background:#c0392b;color:#fff" onclick='deleteAdminQuestion(${JSON.stringify(q._id)})'>حذف</button>
+      </div>
+    </div>`).join('') || '<p class="quiz-sub">لا توجد أسئلة في هذا النموذج حالياً.</p>';
+}
+
+function showAdminQuestionForm(existingId){
+  const item = findQuizItem(adminSelectedQuiz);
+  const existing = existingId ? item.quiz.find(q=>q._id===existingId) : null;
+  const type = existing ? existing.type : 'mcq';
+  const container = document.getElementById('admin-form-container');
+  container.innerHTML = `
+  <div class="exam-lock-card">
+    <h3 style="margin:0 0 12px">${existing ? 'تعديل السؤال' : 'إضافة سؤال جديد'}</h3>
+    <input type="hidden" id="admin-form-existing-id" value="${existing ? existing._id : ''}">
+    <div class="stu-form">
+      <div class="stu-field" style="flex:1">
+        <label>نوع السؤال</label>
+        <select id="admin-form-type" onchange="adminFormTypeChanged()" ${existing?'disabled':''}>
+          <option value="mcq" ${type==='mcq'?'selected':''}>اختيار من متعدد</option>
+          <option value="tf" ${type==='tf'?'selected':''}>صواب / خطأ</option>
+          <option value="fill" ${type==='fill'?'selected':''}>إكمال فراغ</option>
+        </select>
+      </div>
+    </div>
+    <div class="stu-field">
+      <label>نص السؤال</label>
+      <input type="text" id="admin-form-qtext" value="${existing ? escapeHtml(existing.q) : ''}" placeholder="اكتب نص السؤال هنا...">
+    </div>
+    <div id="admin-form-type-fields"></div>
+    <div class="quiz-actions" style="margin-top:14px">
+      <button class="btn primary" onclick="saveAdminQuestion()">حفظ السؤال</button>
+      <button class="btn dark" onclick="document.getElementById('admin-form-container').innerHTML=''">إلغاء</button>
+      <span class="quiz-msg" id="admin-form-msg"></span>
+    </div>
+  </div>`;
+  adminFormTypeChanged(existing);
+}
+
+function adminFormTypeChanged(existing){
+  const type = document.getElementById('admin-form-type').value;
+  const box = document.getElementById('admin-form-type-fields');
+  if(type==='mcq'){
+    const opts = existing && existing.type==='mcq' ? existing.opts : ['','','',''];
+    const a = existing && existing.type==='mcq' ? existing.a : 0;
+    box.innerHTML = `
+      ${opts.map((op,i)=>`
+        <div class="stu-field">
+          <label>الخيار ${i+1} ${i===a?'(الصحيح حالياً)':''}</label>
+          <input type="text" class="admin-mcq-opt" data-i="${i}" value="${escapeHtml(op)}">
+        </div>`).join('')}
+      <div class="stu-field">
+        <label>رقم الخيار الصحيح</label>
+        <select id="admin-mcq-correct">
+          ${[0,1,2,3].map(i=>`<option value="${i}" ${i===a?'selected':''}>الخيار ${i+1}</option>`).join('')}
+        </select>
+      </div>`;
+  } else if(type==='tf'){
+    const a = existing && existing.type==='tf' ? existing.a : true;
+    box.innerHTML = `
+      <div class="stu-field">
+        <label>الإجابة الصحيحة</label>
+        <select id="admin-tf-correct">
+          <option value="true" ${a===true?'selected':''}>صحيح</option>
+          <option value="false" ${a===false?'selected':''}>خطأ</option>
+        </select>
+      </div>`;
+  } else {
+    const a = existing && existing.type==='fill' ? existing.a.join('، ') : '';
+    box.innerHTML = `
+      <div class="stu-field">
+        <label>الإجابات المقبولة (افصل بينها بفاصلة عند وجود أكثر من صيغة صحيحة)</label>
+        <input type="text" id="admin-fill-answers" value="${escapeHtml(a)}" placeholder="مثال: الإدارة، ادارة">
+      </div>`;
+  }
+}
+
+async function saveAdminQuestion(){
+  const quizId = adminSelectedQuiz;
+  const existingId = document.getElementById('admin-form-existing-id').value || null;
+  const type = document.getElementById('admin-form-type').value;
+  const qtext = document.getElementById('admin-form-qtext').value.trim();
+  const msg = document.getElementById('admin-form-msg');
+  if(!qtext){ msg.textContent = "يرجى كتابة نص السؤال."; return; }
+
+  let opts = null, a = null;
+  if(type==='mcq'){
+    opts = Array.from(document.querySelectorAll('.admin-mcq-opt')).map(el=>el.value.trim());
+    if(opts.some(o=>!o)){ msg.textContent = "يرجى تعبئة جميع الخيارات الأربعة."; return; }
+    a = parseInt(document.getElementById('admin-mcq-correct').value, 10);
+  } else if(type==='tf'){
+    a = document.getElementById('admin-tf-correct').value === 'true';
+  } else {
+    const raw = document.getElementById('admin-fill-answers').value.trim();
+    if(!raw){ msg.textContent = "يرجى كتابة إجابة واحدة مقبولة على الأقل."; return; }
+    a = raw.split(/[,،]/).map(s=>s.trim()).filter(Boolean);
+  }
+
+  const id = existingId || `${quizId}-custom-${Date.now()}`;
+  msg.textContent = "جارٍ الحفظ...";
+  try{
+    const res = await fetch(SHEET_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'saveQuestion', adminKey: ADMIN_PANEL_KEY, id, quizId, type, q: qtext, opts, a, deleted:false })
+    });
+    const data = await res.json();
+    if(data.result !== 'success'){
+      msg.textContent = data.message==='unauthorized' ? "رمز المدرب غير صحيح أو غير مطابق لكود Apps Script." : "حدث خطأ أثناء الحفظ.";
+      return;
+    }
+    await loadAllQuestionOverrides();
+    document.getElementById('admin-form-container').innerHTML = '';
+    document.getElementById('admin-question-list').innerHTML = renderAdminQuestionListHtml(adminSelectedQuiz);
+    document.getElementById('admin-msg').textContent = "تم حفظ السؤال بنجاح، وسيظهر لجميع الزوار.";
+    setTimeout(()=>{ const m=document.getElementById('admin-msg'); if(m) m.textContent=''; }, 3000);
+  }catch(e){
+    console.error(e);
+    msg.textContent = "تعذّر الاتصال بملف الشيت. تأكد من اتصالك بالإنترنت.";
+  }
+}
+
+async function deleteAdminQuestion(id){
+  if(!confirm('هل أنت متأكد من حذف هذا السؤال؟')) return;
+  const quizId = adminSelectedQuiz;
+  const msg = document.getElementById('admin-msg');
+  msg.textContent = "جارٍ الحذف...";
+  try{
+    const res = await fetch(SHEET_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'saveQuestion', adminKey: ADMIN_PANEL_KEY, id, quizId, type:'', q:'', opts:null, a:null, deleted:true })
+    });
+    const data = await res.json();
+    if(data.result !== 'success'){
+      msg.textContent = "تعذّر الحذف — تحقق من رمز المدرب.";
+      return;
+    }
+    await loadAllQuestionOverrides();
+    document.getElementById('admin-question-list').innerHTML = renderAdminQuestionListHtml(adminSelectedQuiz);
+    msg.textContent = "تم الحذف بنجاح.";
+    setTimeout(()=>{ const m=document.getElementById('admin-msg'); if(m) m.textContent=''; }, 3000);
+  }catch(e){
+    console.error(e);
+    msg.textContent = "تعذّر الاتصال بملف الشيت.";
+  }
+}
+
 function renderReview(uid){
   const st = quizState[uid];
   const el = document.getElementById(`review-${uid}`);
@@ -2165,6 +2461,10 @@ function renderPage(page){
     if(!document.getElementById('page-exams')){
       ensurePageDiv('exams', renderExamsPage());
     }
+  } else if(page==='admin'){
+    const existingAdmin = document.getElementById('page-admin');
+    if(existingAdmin) existingAdmin.remove();
+    ensurePageDiv('admin', trainerUnlocked ? renderTrainerPanelHtml() : renderTrainerLockHtml());
   } else if(page==='results'){
     if(!document.getElementById('page-results')){
       if(resultsUnlocked){ renderResults(); } else { renderResultsLock(); }
@@ -2207,6 +2507,16 @@ function ensurePageDiv(id, html){
 // ---------- التهيئة ----------
 document.addEventListener('DOMContentLoaded', ()=>{
   goTo('home', true);
+  // مزامنة أي أسئلة أضافها/عدّلها/حذفها المدرب من لوحة التحكم، تعمل في الخلفية دون تعطيل عرض الصفحة
+  loadAllQuestionOverrides().then(()=>{
+    if(currentPage === 'exams'){
+      const el = document.getElementById('page-exams'); if(el) el.remove();
+      renderPage('exams');
+    } else {
+      const unitIdx = UNITS.findIndex(u=>u.id===currentPage);
+      if(unitIdx>-1){ const el = document.getElementById('page-'+currentPage); if(el) el.remove(); renderPage(currentPage); }
+    }
+  });
 });
 
 
