@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.13.0/mammoth.browser.min.js"></script>
 <style>
 :root{
   --ink:#161b22;
@@ -1992,12 +1993,18 @@ function renderTrainerPanelHtml(){
       </div>
     </div>
 
-    <div class="quiz-actions" style="margin-bottom:14px">
+    <div class="quiz-actions" style="margin-bottom:14px;flex-wrap:wrap">
       <button class="btn primary" onclick="showAdminQuestionForm()">+ إضافة سؤال جديد</button>
       <button class="btn dark" onclick="refreshAdminPanel()">تحديث القائمة</button>
+      <button class="btn dark" onclick="exportQuestionsToWord(adminSelectedQuiz)">${ICONS.download} تصدير أسئلة هذا النموذج (Word)</button>
+      <label class="btn dark" style="cursor:pointer;margin:0">
+        استيراد من Word
+        <input type="file" accept=".docx,.doc,.txt" style="display:none" onchange="handleWordImportFile(event)">
+      </label>
       <span class="quiz-msg" id="admin-msg"></span>
     </div>
 
+    <div id="admin-import-preview"></div>
     <div id="admin-form-container"></div>
     <div id="admin-question-list">${renderAdminQuestionListHtml(adminSelectedQuiz)}</div>
   </div>`;
@@ -2175,6 +2182,175 @@ async function deleteAdminQuestion(id){
   }catch(e){
     console.error(e);
     msg.textContent = "تعذّر الاتصال بملف الشيت.";
+  }
+}
+
+// ---------- تصدير/استيراد أسئلة النموذج كملف Word ----------
+const WORD_Q_MARKER = "===السؤال"; // فاصل ثابت بين كل سؤال وآخر في ملف Word المُصدَّر
+
+function typeArabicLabel(type){
+  return type==='mcq' ? 'اختيار من متعدد' : type==='tf' ? 'صواب أو خطأ' : 'إكمال الفراغ';
+}
+
+function exportQuestionsToWord(quizId){
+  const item = findQuizItem(quizId);
+  if(!item) return;
+  const title = item.isExam ? item.title : `الوحدة ${item.num}: ${item.title}`;
+  let body = `<h2>أسئلة: ${escapeHtml(title)}</h2>`;
+  body += `<p>يمكنك تعديل نصوص الأسئلة والخيارات والإجابات في هذا الملف، ثم رفعه مرة أخرى من لوحة المدرب. لا تغيّر تنسيق الأسطر التي تبدأ بـ «${WORD_Q_MARKER}»، «النوع:»، «النص:»، «الخيار»، أو «الإجابة».</p>`;
+  item.quiz.forEach((q,i)=>{
+    body += `<p>${WORD_Q_MARKER} ${i+1}===</p>`;
+    body += `<p>النوع: ${typeArabicLabel(q.type)}</p>`;
+    body += `<p>النص: ${escapeHtml(q.q)}</p>`;
+    if(q.type==='mcq'){
+      q.opts.forEach((op,oi)=>{ body += `<p>الخيار ${oi+1}: ${escapeHtml(op)}</p>`; });
+      body += `<p>الإجابة الصحيحة: ${q.a+1}</p>`;
+    } else if(q.type==='tf'){
+      body += `<p>الإجابة الصحيحة: ${q.a ? 'صواب' : 'خطأ'}</p>`;
+    } else {
+      body += `<p>الإجابات المقبولة: ${q.a.map(escapeHtml).join('، ')}</p>`;
+    }
+    body += `<p>&nbsp;</p>`;
+  });
+  const html = `<html dir="rtl" lang="ar"><head><meta charset="utf-8"></head><body style="font-family:Arial;font-size:14px">${body}</body></html>`;
+
+  try{
+    const b64 = btoa(unescape(encodeURIComponent(html)));
+    const dataUrl = `data:application/msword;charset=utf-8;base64,${b64}`;
+    const filename = `اسئلة_${quizId}.doc`;
+    const a = document.createElement('a');
+    a.href = dataUrl; a.download = filename; a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showManualDownloadFallback(dataUrl, filename);
+  }catch(e){
+    console.error(e);
+    alert('حدث خطأ أثناء إنشاء ملف Word.');
+  }
+}
+
+function parseWordQuestions(text){
+  // توحيد فواصل الأسطر ثم تقسيم النص إلى كتل، كل كتلة تمثل سؤالاً واحداً
+  const clean = text.replace(/\r\n/g, '\n');
+  const parts = clean.split(new RegExp(WORD_Q_MARKER.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\s*\\d+\\s*==='));
+  const blocks = parts.slice(1); // العنصر الأول قبل أول فاصل هو مقدمة الملف، نتجاهله
+  const questions = [];
+  blocks.forEach(block=>{
+    const lines = block.split('\n').map(l=>l.trim()).filter(Boolean);
+    const fields = {};
+    const opts = [];
+    lines.forEach(line=>{
+      const idx = line.indexOf(':');
+      if(idx === -1) return;
+      const label = line.slice(0, idx).trim();
+      const value = line.slice(idx+1).trim();
+      if(/^الخيار\s*\d+$/.test(label)){
+        const n = parseInt(label.match(/\d+/)[0], 10);
+        opts[n-1] = value;
+      } else {
+        fields[label] = value;
+      }
+    });
+    const typeLabel = fields['النوع'] || '';
+    const qtext = fields['النص'] || '';
+    if(!qtext) return; // كتلة فارغة أو غير مكتملة، تجاهلها
+    let type, a;
+    if(typeLabel.includes('متعدد')){
+      type = 'mcq';
+      const correctNum = parseInt(fields['الإجابة الصحيحة'], 10);
+      a = isNaN(correctNum) ? 0 : correctNum - 1;
+      if(opts.filter(Boolean).length < 2) return; // لا يمكن قبول سؤال اختيارات بأقل من خيارين
+    } else if(typeLabel.includes('صواب') || typeLabel.includes('خطأ')){
+      type = 'tf';
+      a = (fields['الإجابة الصحيحة'] || '').includes('صواب');
+    } else {
+      type = 'fill';
+      const raw = fields['الإجابات المقبولة'] || '';
+      a = raw.split(/[,،]/).map(s=>s.trim()).filter(Boolean);
+      if(a.length === 0) return;
+    }
+    questions.push({ type, q: qtext, opts: type==='mcq' ? opts.filter(Boolean) : undefined, a });
+  });
+  return questions;
+}
+
+async function handleWordImportFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const preview = document.getElementById('admin-import-preview');
+  preview.innerHTML = `<p class="quiz-sub">جارٍ قراءة الملف...</p>`;
+  try{
+    let text;
+    const isDocx = /\.docx$/i.test(file.name);
+    if(isDocx && typeof mammoth !== 'undefined'){
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({arrayBuffer});
+      text = result.value;
+    } else {
+      const raw = await file.text();
+      // في حال كان الملف بصيغة HTML (كملف .doc المُصدَّر من الموقع مباشرة دون تعديل في Word)
+      text = raw.includes('<html') ? raw.replace(/<[^>]+>/g, '\n') : raw;
+    }
+    const parsed = parseWordQuestions(text);
+    if(parsed.length === 0){
+      preview.innerHTML = `<p class="quiz-sub" style="color:#c0392b">لم يتم التعرف على أي أسئلة في هذا الملف. تأكد أنه الملف المُصدَّر من الموقع ولم يتغيّر تنسيقه الأساسي (أسطر «${WORD_Q_MARKER}»، «النوع:»، «النص:»...).</p>`;
+      return;
+    }
+    preview.innerHTML = `
+    <div class="exam-lock-card">
+      <h3 style="margin:0 0 12px">معاينة الاستيراد</h3>
+      <p>تم التعرف على <b>${parsed.length}</b> سؤالاً في الملف لنموذج «${escapeHtml(findQuizItem(adminSelectedQuiz).title || '')}».</p>
+      <p>اختر طريقة الاستيراد:</p>
+      <div class="quiz-actions">
+        <button class="btn primary" onclick='runWordImport("append")'>إضافة كأسئلة جديدة (مع الإبقاء على الموجود)</button>
+        <button class="btn" style="background:#c0392b;color:#fff" onclick='runWordImport("replace")'>استبدال جميع أسئلة هذا النموذج</button>
+        <button class="btn dark" onclick="document.getElementById('admin-import-preview').innerHTML=''">إلغاء</button>
+      </div>
+      <div class="quiz-msg" id="admin-import-msg"></div>
+    </div>`;
+    window.__pendingWordImport = parsed;
+  }catch(e){
+    console.error(e);
+    preview.innerHTML = `<p class="quiz-sub" style="color:#c0392b">تعذّرت قراءة الملف. تأكد أنه ملف Word صحيح (.docx) أو الملف نفسه المُصدَّر من الموقع.</p>`;
+  }
+  event.target.value = '';
+}
+
+async function runWordImport(mode){
+  const quizId = adminSelectedQuiz;
+  const parsed = window.__pendingWordImport || [];
+  const msg = document.getElementById('admin-import-msg');
+  if(msg) msg.textContent = "جارٍ الاستيراد...";
+
+  try{
+    if(mode === 'replace'){
+      const current = findQuizItem(quizId).quiz;
+      for(const q of current){
+        await fetch(SHEET_WEBHOOK_URL, {
+          method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ action:'saveQuestion', adminKey: ADMIN_PANEL_KEY, id:q._id, quizId, type:'', q:'', opts:null, a:null, deleted:true })
+        });
+      }
+    }
+    let i = 0;
+    for(const pq of parsed){
+      i++;
+      const id = `${quizId}-custom-${Date.now()}-${i}`;
+      await fetch(SHEET_WEBHOOK_URL, {
+        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'saveQuestion', adminKey: ADMIN_PANEL_KEY, id, quizId, type:pq.type, q:pq.q, opts:pq.opts||null, a:pq.a, deleted:false })
+      });
+    }
+    await loadAllQuestionOverrides();
+    document.getElementById('admin-question-list').innerHTML = renderAdminQuestionListHtml(adminSelectedQuiz);
+    document.getElementById('admin-import-preview').innerHTML = '';
+    document.getElementById('admin-msg').textContent = `تم استيراد ${parsed.length} سؤالاً بنجاح.`;
+    window.__pendingWordImport = null;
+    setTimeout(()=>{ const m=document.getElementById('admin-msg'); if(m) m.textContent=''; }, 4000);
+  }catch(e){
+    console.error(e);
+    if(msg) msg.textContent = "حدث خطأ أثناء الاستيراد. تحقق من اتصالك بالإنترنت.";
   }
 }
 
