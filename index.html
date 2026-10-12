@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>السلامة الصناعية | حقيبة تدريبية تفاعلية</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#10202c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="السلامة الصناعية">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -2681,6 +2689,7 @@ function ensurePageDiv(id, html){
 }
 
 // ---------- التهيئة ----------
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 document.addEventListener('DOMContentLoaded', ()=>{
   goTo('home', true);
   // مزامنة أي أسئلة أضافها/عدّلها/حذفها المدرب من لوحة التحكم، تعمل في الخلفية دون تعطيل عرض الصفحة
