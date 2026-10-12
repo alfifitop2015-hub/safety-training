@@ -1,10 +1,10 @@
 // Service worker: يجعل الموقع قابلاً للتثبيت ويعمل بدون إنترنت بعد أول زيارة.
 // الشبكة أولاً (لتصل تحديثات الأسئلة فوراً)، ثم النسخة المخزنة عند انقطاع الاتصال.
-const CACHE = 'safety-v1';
+const CACHE = 'safety-v2';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => Promise.allSettled(CORE.map(u => c.add(u)))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()

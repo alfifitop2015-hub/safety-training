@@ -67,11 +67,11 @@ button{font-family:inherit;cursor:pointer;}
 }
 #topbar .brand-mark svg{width:20px;height:20px;}
 #topbar .brand-text .t1{font-family:'Cairo';font-weight:800;font-size:15.5px;color:#fff;letter-spacing:.2px;}
-#results-topbtn,#exams-topbtn,#admin-topbtn{
+#results-topbtn,#exams-topbtn,#admin-topbtn,#install-topbtn{
   display:flex;align-items:center;gap:8px;color:#c9d6de;text-decoration:none;font-size:13px;font-weight:700;
   padding:8px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.15);transition:background .15s,color .15s;
 }
-#results-topbtn:hover,#exams-topbtn:hover,#admin-topbtn:hover{background:rgba(255,255,255,.08);color:#fff;}
+#results-topbtn:hover,#exams-topbtn:hover,#admin-topbtn:hover,#install-topbtn:hover{background:rgba(255,255,255,.08);color:#fff;}
 
 .exam-lock-card{
   background:#fff;border:1px solid #e7ded2;border-radius:16px;padding:22px 24px;margin-bottom:18px;
@@ -86,7 +86,7 @@ button{font-family:inherit;cursor:pointer;}
 }
 .exam-unlocked{margin-bottom:22px;}
 @media(max-width:480px){
-  #exams-topbtn span,#admin-topbtn span{display:none;}
+  #exams-topbtn span,#admin-topbtn span,#install-topbtn span{display:none;}
 }
 
 /* main */
@@ -522,6 +522,7 @@ table tr:nth-child(even) td{background:#f8f9f4;}
     <div class="brand-text"><div class="t1">السلامة الصناعية</div></div>
   </a>
   <div style="display:flex;align-items:center;gap:8px">
+    <a href="#" id="install-topbtn" style="display:none" onclick="installApp();return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0 0-4-4m4 4 4-4"/><path d="M4 20h16"/></svg><span>تثبيت التطبيق</span></a>
     <a href="#" id="exams-topbtn" onclick="goTo('exams');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>نماذج اختبارات</span></a>
     <a href="#" id="results-topbtn" onclick="goTo('results');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg><span>سجل النتائج</span></a>
     <a href="#" id="admin-topbtn" onclick="goTo('admin');return false;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg><span>لوحة المدرب</span></a>
@@ -2689,6 +2690,22 @@ function ensurePageDiv(id, html){
 }
 
 // ---------- التهيئة ----------
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault(); deferredInstallPrompt = e;
+  const b = document.getElementById('install-topbtn'); if(b) b.style.display = 'flex';
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredInstallPrompt = null;
+  const b = document.getElementById('install-topbtn'); if(b) b.style.display = 'none';
+});
+async function installApp(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  try{ await deferredInstallPrompt.userChoice; }catch(e){}
+  deferredInstallPrompt = null;
+  const b = document.getElementById('install-topbtn'); if(b) b.style.display = 'none';
+}
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 document.addEventListener('DOMContentLoaded', ()=>{
   goTo('home', true);
