@@ -84,6 +84,14 @@ button{font-family:inherit;cursor:pointer;}
 .exam-lock-form input{
   flex:1;min-width:180px;padding:11px 14px;border-radius:9px;border:1.5px solid #ddd2c0;font-size:14.5px;font-family:'Cairo';
 }
+.trainer-inline{margin-top:18px;padding-top:14px;border-top:2px dashed #e0b24a;}
+.ti-form{margin-top:12px;background:#fff8e6;border:1px solid #f0d58a;border-radius:12px;padding:14px;}
+.mini-del{background:none;border:none;cursor:pointer;font-size:15px;margin-inline-start:8px;opacity:.75;}
+.mini-del:hover{opacity:1;}
+.extra-note{background:#eef5fb;border-inline-start:4px solid var(--steel);border-radius:10px;padding:12px 16px;margin:14px 0;}
+.extra-note p{margin:6px 0 0;line-height:1.9;}
+#trainer-chip{position:fixed;bottom:14px;inset-inline-start:14px;z-index:60;background:#20140a;color:#fff;border:1px solid #f0a202;border-radius:999px;padding:8px 8px 8px 14px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:10px;box-shadow:0 6px 18px rgba(0,0,0,.3);}
+#trainer-chip button{background:#f0a202;color:#20140a;border:none;border-radius:999px;padding:5px 12px;font-weight:800;cursor:pointer;font-family:inherit;}
 .exam-unlocked{margin-bottom:22px;}
 @media(max-width:480px){
   #exams-topbtn span,#admin-topbtn span,#install-topbtn span{display:none;}
@@ -1547,11 +1555,163 @@ let extraVideos = []; // {id, unitId, sectionIdx, title, url}
 
 function safeUrl(u){ return /^https?:\/\//i.test(u||'') ? u : '#'; }
 
+function safeImgUrl(u){ return /^(https?:\/\/|data:image\/(jpeg|png|webp);base64,)/i.test(u||'') ? u : ''; }
+
 function extraClipsHtml(unitId, sectionIdx){
   const items = extraVideos.filter(v=>v.unitId===unitId && Number(v.sectionIdx)===Number(sectionIdx));
-  if(!items.length) return '';
-  return `<div class="ig-links"><b>${ICONS.instagram||''} مقاطع إضافية من المدرب</b><ul>` +
-    items.map(v=>`<li><a href="${escapeHtml(safeUrl(v.url))}" target="_blank" rel="noopener">${escapeHtml(v.title||'مشاهدة المقطع')}</a></li>`).join('') + `</ul></div>`;
+  const del = id => trainerUnlocked ? ` <button class="mini-del" title="حذف" onclick='deleteInlineMedia(${JSON.stringify(id)})'>🗑</button>` : '';
+  const kindOf = v => v.kind || 'link';
+  const links = items.filter(v=>kindOf(v)==='link');
+  let html = '';
+  if(links.length){
+    html += `<div class="ig-links"><b>${ICONS.instagram||''} مقاطع إضافية من المدرب</b><ul>` +
+      links.map(v=>`<li><a href="${escapeHtml(safeUrl(v.url))}" target="_blank" rel="noopener">${escapeHtml(v.title||'مشاهدة المقطع')}</a>${del(v.id)}</li>`).join('') + `</ul></div>`;
+  }
+  items.filter(v=>kindOf(v)==='image').forEach(v=>{
+    const src = safeImgUrl(v.url); if(!src) return;
+    html += `<div class="photo-wrap"><img src="${escapeHtml(src)}" alt="${escapeHtml(v.title||'')}" loading="lazy" onerror="this.closest('.photo-wrap').style.display='none'"><div class="photo-cap">${escapeHtml(v.title||'')}${del(v.id)}</div></div>`;
+  });
+  items.filter(v=>kindOf(v)==='note').forEach(v=>{
+    html += `<div class="extra-note"><b>${escapeHtml(v.title||'ملاحظة')}</b>${del(v.id)}<p>${escapeHtml(v.url||'').replace(/\n/g,'<br>')}</p></div>`;
+  });
+  if(trainerUnlocked) html += inlineAddHtml(unitId, sectionIdx);
+  return html;
+}
+
+function inlineAddHtml(unitId, idx){
+  const k = `${unitId}-${idx}`;
+  return `<div class="trainer-inline">
+    <button class="btn dark" onclick="toggleInlineForm('${k}')">+ إضافة مقطع أو صورة أو ملاحظة لهذا الموضوع</button>
+    <div class="ti-form" id="tif-${k}" hidden>
+      <div class="stu-field"><label>نوع الإضافة</label>
+        <select id="tik-${k}" onchange="inlineKindChanged('${k}')">
+          <option value="link">رابط مقطع فيديو (إنستجرام / يوتيوب ...)</option>
+          <option value="image">صورة</option>
+          <option value="note">ملاحظة نصية توضيحية</option>
+        </select></div>
+      <div class="stu-field"><label>العنوان</label><input type="text" id="tit-${k}" placeholder="عنوان يظهر للمتدربين"></div>
+      <div class="stu-field" id="tiurlw-${k}"><label id="tiurll-${k}">رابط المقطع</label><input type="text" id="tiu-${k}" dir="ltr" placeholder="https://..."></div>
+      <div class="stu-field" id="tifilew-${k}" hidden><label>أو ارفع صورة من جهازك (تُصغَّر تلقائياً)</label><input type="file" id="tif-file-${k}" accept="image/*"></div>
+      <div class="stu-field" id="tinotew-${k}" hidden><label>نص الملاحظة</label><textarea id="tin-${k}" rows="4" style="width:100%;padding:10px;border-radius:9px;border:1.5px solid #ddd2c0;font-family:inherit;font-size:14.5px"></textarea></div>
+      <div class="quiz-actions" style="margin-top:10px">
+        <button class="btn primary" onclick="saveInlineMedia('${unitId}',${idx})">حفظ وإظهاره للجميع</button>
+        <span class="quiz-msg" id="tim-${k}"></span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleInlineForm(k){ const f = document.getElementById('tif-'+k); if(f) f.hidden = !f.hidden; }
+
+function inlineKindChanged(k){
+  const kind = document.getElementById('tik-'+k).value;
+  document.getElementById('tiurlw-'+k).hidden = (kind==='note');
+  document.getElementById('tifilew-'+k).hidden = (kind!=='image');
+  document.getElementById('tinotew-'+k).hidden = (kind!=='note');
+  document.getElementById('tiurll-'+k).textContent = kind==='image' ? 'رابط الصورة (اختياري إن رفعت صورة)' : 'رابط المقطع';
+}
+
+// تصغير الصورة المرفوعة حتى تتسع في خلية واحدة من الشيت (حد الخلية 50 ألف حرف)
+function compressImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const fr = new FileReader();
+    fr.onerror = reject;
+    fr.onload = ()=>{
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = ()=>{
+        for(const maxSide of [640, 520, 420, 340, 280]){
+          const sc = Math.min(1, maxSide/Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+          const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height);
+          for(const q of [0.72, 0.6, 0.5, 0.4]){
+            const d = c.toDataURL('image/jpeg', q);
+            if(d.length < 45000) return resolve(d);
+          }
+        }
+        reject(new Error('too big'));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+function rerenderCurrentUnit(){
+  if(UNITS.some(u=>u.id===currentPage)){
+    const el = document.getElementById('page-'+currentPage); if(el) el.remove();
+    renderPage(currentPage);
+  }
+}
+
+async function saveInlineMedia(unitId, idx){
+  const k = `${unitId}-${idx}`;
+  const msg = document.getElementById('tim-'+k);
+  const kind = document.getElementById('tik-'+k).value;
+  const title = document.getElementById('tit-'+k).value.trim();
+  let value = '';
+  if(kind==='note'){
+    value = document.getElementById('tin-'+k).value.trim();
+    if(!value){ msg.textContent = "اكتب نص الملاحظة."; return; }
+  } else if(kind==='image'){
+    const file = document.getElementById('tif-file-'+k).files[0];
+    const urlv = document.getElementById('tiu-'+k).value.trim();
+    if(file){
+      msg.textContent = "جارٍ تصغير الصورة...";
+      try{ value = await compressImageFile(file); }
+      catch(e){ msg.textContent = "تعذّر تجهيز الصورة. جرّب صورة أخرى أو استخدم رابطاً."; return; }
+    } else if(/^https?:\/\//i.test(urlv)){ value = urlv; }
+    else { msg.textContent = "ارفع صورة أو ألصق رابطها (https://)."; return; }
+  } else {
+    value = document.getElementById('tiu-'+k).value.trim();
+    if(!/^https?:\/\//i.test(value)){ msg.textContent = "الرابط يجب أن يبدأ بـ https://"; return; }
+  }
+  if(!title && kind!=='note'){ msg.textContent = "اكتب عنواناً."; return; }
+  msg.textContent = "جارٍ الحفظ...";
+  try{
+    const data = await postVideo({ id:`vid-${Date.now()}`, unitId, sectionIdx:idx, title, url:value, kind, deleted:false });
+    if(data.result !== 'success'){
+      msg.textContent = data.message==='unauthorized' ? "رمز المدرب غير مطابق لكود Apps Script." : "حدث خطأ أثناء الحفظ.";
+      return;
+    }
+    await loadAllVideos();
+    rerenderCurrentUnit();
+  }catch(e){
+    console.error(e);
+    msg.textContent = "تعذّر الاتصال بملف الشيت. تأكد من الإنترنت ومن تحديث كود Apps Script.";
+  }
+}
+
+async function deleteInlineMedia(id){
+  if(!confirm('حذف هذه الإضافة؟')) return;
+  try{
+    const v = extraVideos.find(x=>x.id===id) || {};
+    const data = await postVideo({ id, unitId:v.unitId||'', sectionIdx:v.sectionIdx||0, title:v.title||'', url:'', kind:v.kind||'link', deleted:true });
+    if(data.result !== 'success') return;
+    await loadAllVideos();
+    rerenderCurrentUnit();
+  }catch(e){ console.error(e); }
+}
+
+// وضع المدرب: شريط عائم للخروج + إعادة بناء صفحات الوحدات لإظهار/إخفاء أدوات الإضافة
+function refreshUnitPagesForTrainerMode(){
+  UNITS.forEach(u=>{ const el = document.getElementById('page-'+u.id); if(el) el.remove(); });
+  rerenderCurrentUnit();
+}
+function showTrainerChip(){
+  if(document.getElementById('trainer-chip')) return;
+  const c = document.createElement('div');
+  c.id = 'trainer-chip';
+  c.innerHTML = `وضع المدرب مفعّل <button onclick="exitTrainerMode()">إنهاء</button>`;
+  document.body.appendChild(c);
+}
+function exitTrainerMode(){
+  trainerUnlocked = false;
+  const c = document.getElementById('trainer-chip'); if(c) c.remove();
+  const a = document.getElementById('page-admin'); if(a) a.remove();
+  if(currentPage==='admin'){ goTo('home', true); }
+  else { refreshUnitPagesForTrainerMode(); }
 }
 
 async function loadAllVideos(){
@@ -1994,6 +2154,8 @@ function checkTrainerKey(){
   const val = document.getElementById('trainer-key-input').value.trim();
   if(val === ADMIN_PANEL_KEY){
     trainerUnlocked = true;
+    showTrainerChip();
+    UNITS.forEach(u=>{ const el = document.getElementById('page-'+u.id); if(el) el.remove(); });
     goTo('admin', true);
   } else {
     document.getElementById('trainer-key-msg').textContent = "رمز الدخول غير صحيح.";
@@ -2441,7 +2603,7 @@ async function saveAdminVideo(){
   if(!/^https?:\/\//i.test(url)){ msg.textContent = "الرابط يجب أن يبدأ بـ https://"; return; }
   msg.textContent = "جارٍ الحفظ...";
   try{
-    const data = await postVideo({ id:`vid-${Date.now()}`, unitId, sectionIdx, title, url, deleted:false });
+    const data = await postVideo({ id:`vid-${Date.now()}`, unitId, sectionIdx, title, url, kind:'link', deleted:false });
     if(data.result !== 'success'){
       msg.textContent = data.message==='unauthorized' ? "رمز المدرب غير مطابق لكود Apps Script." : "حدث خطأ أثناء الحفظ.";
       return;
