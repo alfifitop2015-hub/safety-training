@@ -1542,6 +1542,27 @@ function mergeQuestions(quizId, baseArr, overrideRows){
 }
 
 let lastQuestionOverrides = {}; // quizId -> rows[] (يُستخدم في تحديث لوحة المدرب فوراً بعد الحفظ)
+// ---------- مقاطع إضافية يضيفها المدرب من لوحته (تظهر لجميع الزوار) ----------
+let extraVideos = []; // {id, unitId, sectionIdx, title, url}
+
+function safeUrl(u){ return /^https?:\/\//i.test(u||'') ? u : '#'; }
+
+function extraClipsHtml(unitId, sectionIdx){
+  const items = extraVideos.filter(v=>v.unitId===unitId && Number(v.sectionIdx)===Number(sectionIdx));
+  if(!items.length) return '';
+  return `<div class="ig-links"><b>${ICONS.instagram||''} مقاطع إضافية من المدرب</b><ul>` +
+    items.map(v=>`<li><a href="${escapeHtml(safeUrl(v.url))}" target="_blank" rel="noopener">${escapeHtml(v.title||'مشاهدة المقطع')}</a></li>`).join('') + `</ul></div>`;
+}
+
+async function loadAllVideos(){
+  if(!SHEET_WEBHOOK_URL) return;
+  try{
+    const res = await fetch(`${SHEET_WEBHOOK_URL}?action=videos`);
+    const data = await res.json();
+    extraVideos = (data.rows||[]).filter(r=>!r.deleted);
+  }catch(e){ console.error("video sync failed", e); }
+}
+
 let ORIGINAL_QUIZZES = null; // نسخة أصلية ثابتة من كل بنك أسئلة، لا تُعدَّل أبداً، تُستخدم كأساس لكل عملية مزامنة
 
 function ensureOriginalQuizzesCaptured(){
@@ -1686,7 +1707,7 @@ function renderUnit(u, idx){
       </div>
       <div class="slide-card" id="slidecard-${u.id}">
         <h2>${sec.h}</h2>
-        ${sec.body}
+        ${sec.body}${extraClipsHtml(u.id, cur)}
       </div>
       <div class="slide-nav">${prevBtn}${nextBtn}</div>
     </div>
@@ -2013,6 +2034,7 @@ function renderTrainerPanelHtml(){
       <span class="quiz-msg" id="admin-msg"></span>
     </div>
 
+    <div id="admin-videos">${renderAdminVideosHtml()}</div>
     <div id="admin-import-preview"></div>
     <div id="admin-form-container"></div>
     <div id="admin-question-list">${renderAdminQuestionListHtml(adminSelectedQuiz)}</div>
@@ -2363,6 +2385,88 @@ async function runWordImport(mode){
   }
 }
 
+// ---------- إدارة المقاطع الإضافية ----------
+let adminVideoUnit = null;
+
+function renderAdminVideosHtml(){
+  if(!adminVideoUnit) adminVideoUnit = UNITS[0].id;
+  const u = UNITS.find(x=>x.id===adminVideoUnit);
+  const unitOpts = UNITS.map(x=>`<option value="${x.id}" ${x.id===adminVideoUnit?'selected':''}>الوحدة ${x.num}: ${escapeHtml(x.title)}</option>`).join('');
+  const secOpts = u.sections.map((sec,i)=>`<option value="${i}">${i+1}. ${escapeHtml(String(sec.h).replace(/<[^>]+>/g,''))}</option>`).join('');
+  const list = extraVideos.filter(v=>v.unitId===adminVideoUnit).map(v=>`
+    <div class="q-block" style="padding:12px 16px">
+      <div class="q-text" style="margin:0">${escapeHtml(v.title)}</div>
+      <div class="q-num" style="margin:4px 0 8px">الموضوع: ${escapeHtml(String((u.sections[v.sectionIdx]||{}).h||'').replace(/<[^>]+>/g,''))}</div>
+      <div class="quiz-actions">
+        <a class="btn dark" href="${escapeHtml(safeUrl(v.url))}" target="_blank" rel="noopener">فتح المقطع</a>
+        <button class="btn" style="background:#c0392b;color:#fff" onclick='deleteAdminVideo(${JSON.stringify(v.id)})'>حذف</button>
+      </div>
+    </div>`).join('') || '<p class="quiz-sub">لا توجد مقاطع مضافة لهذه الوحدة بعد.</p>';
+  return `
+  <div class="exam-lock-card">
+    <h3 style="margin:0 0 12px">إضافة مقطع فيديو لموضوع</h3>
+    <div class="stu-field"><label>الوحدة</label><select id="admin-video-unit" onchange="onAdminVideoUnitChange()">${unitOpts}</select></div>
+    <div class="stu-field"><label>الموضوع (الشريحة) الذي سيظهر فيه المقطع</label><select id="admin-video-section">${secOpts}</select></div>
+    <div class="stu-field"><label>عنوان المقطع</label><input type="text" id="admin-video-title" placeholder="مثال: محاكاة خطر الصعق الكهربائي"></div>
+    <div class="stu-field"><label>رابط المقطع (إنستجرام أو يوتيوب أو غيره)</label><input type="text" id="admin-video-url" placeholder="https://www.instagram.com/reel/..." dir="ltr"></div>
+    <div class="quiz-actions" style="margin-top:12px">
+      <button class="btn primary" onclick="saveAdminVideo()">إضافة المقطع</button>
+      <span class="quiz-msg" id="admin-video-msg"></span>
+    </div>
+    <h3 style="margin:20px 0 10px">المقاطع المضافة لهذه الوحدة</h3>
+    ${list}
+  </div>`;
+}
+
+function onAdminVideoUnitChange(){
+  adminVideoUnit = document.getElementById('admin-video-unit').value;
+  document.getElementById('admin-videos').innerHTML = renderAdminVideosHtml();
+}
+
+async function postVideo(payload){
+  const res = await fetch(SHEET_WEBHOOK_URL, {
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({ action:'saveVideo', adminKey: ADMIN_PANEL_KEY, ...payload })
+  });
+  return res.json();
+}
+
+async function saveAdminVideo(){
+  const msg = document.getElementById('admin-video-msg');
+  const unitId = document.getElementById('admin-video-unit').value;
+  const sectionIdx = parseInt(document.getElementById('admin-video-section').value, 10);
+  const title = document.getElementById('admin-video-title').value.trim();
+  const url = document.getElementById('admin-video-url').value.trim();
+  if(!title){ msg.textContent = "يرجى كتابة عنوان للمقطع."; return; }
+  if(!/^https?:\/\//i.test(url)){ msg.textContent = "الرابط يجب أن يبدأ بـ https://"; return; }
+  msg.textContent = "جارٍ الحفظ...";
+  try{
+    const data = await postVideo({ id:`vid-${Date.now()}`, unitId, sectionIdx, title, url, deleted:false });
+    if(data.result !== 'success'){
+      msg.textContent = data.message==='unauthorized' ? "رمز المدرب غير مطابق لكود Apps Script." : "حدث خطأ أثناء الحفظ.";
+      return;
+    }
+    await loadAllVideos();
+    adminVideoUnit = unitId;
+    document.getElementById('admin-videos').innerHTML = renderAdminVideosHtml();
+    const m = document.getElementById('admin-video-msg'); if(m) m.textContent = "تمت إضافة المقطع وسيظهر لجميع الزوار.";
+  }catch(e){
+    console.error(e);
+    msg.textContent = "تعذّر الاتصال بملف الشيت. تأكد من الإنترنت ومن تحديث كود Apps Script.";
+  }
+}
+
+async function deleteAdminVideo(id){
+  if(!confirm('حذف هذا المقطع؟')) return;
+  try{
+    const v = extraVideos.find(x=>x.id===id) || {};
+    const data = await postVideo({ id, unitId:v.unitId||'', sectionIdx:v.sectionIdx||0, title:v.title||'', url:v.url||'', deleted:true });
+    if(data.result !== 'success') return;
+    await loadAllVideos();
+    document.getElementById('admin-videos').innerHTML = renderAdminVideosHtml();
+  }catch(e){ console.error(e); }
+}
+
 function renderReview(uid){
   const st = quizState[uid];
   const el = document.getElementById(`review-${uid}`);
@@ -2710,7 +2814,7 @@ if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator
 document.addEventListener('DOMContentLoaded', ()=>{
   goTo('home', true);
   // مزامنة أي أسئلة أضافها/عدّلها/حذفها المدرب من لوحة التحكم، تعمل في الخلفية دون تعطيل عرض الصفحة
-  loadAllQuestionOverrides().then(()=>{
+  Promise.all([loadAllQuestionOverrides(), loadAllVideos()]).then(()=>{
     if(currentPage === 'exams'){
       const el = document.getElementById('page-exams'); if(el) el.remove();
       renderPage('exams');
