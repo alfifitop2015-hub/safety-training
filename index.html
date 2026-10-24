@@ -725,12 +725,12 @@ function videoEmbed(youtubeId, caption){
 // helper: external (non-embedded) video reference links for further viewing
 function videoLinks(items){
   return `<div class="video-links"><b>مقاطع فيديو مقترحة للاستزادة (روابط خارجية للمشاهدة عند توفر الإنترنت)</b><ul>` +
-    items.map(it=>`<li><a href="${it[1]}" target="_blank" rel="noopener">${it[0]}</a></li>`).join('') + `</ul></div>`;
+    items.map(it=>`<li data-clip="${it[1]}"><a href="${it[1]}" target="_blank" rel="noopener">${it[0]}</a></li>`).join('') + `</ul></div>`;
 }
 // helper: مقاطع محاكاة/تحفيزية من حسابات رسمية موثّقة على إنستجرام (روابط خارجية، غير مُضمَّنة)
 function igLinks(items){
   return `<div class="ig-links"><b>${ICONS.instagram||''} مقاطع محاكاة من إنستجرام</b><ul>` +
-    items.map(it=>`<li><a href="${it[1]}" target="_blank" rel="noopener">${it[0]}</a>${it[2]?` <span class="ig-acc">— ${it[2]}</span>`:''}</li>`).join('') + `</ul></div>`;
+    items.map(it=>`<li data-clip="${it[1]}"><a href="${it[1]}" target="_blank" rel="noopener">${it[0]}</a>${it[2]?` <span class="ig-acc">— ${it[2]}</span>`:''}</li>`).join('') + `</ul></div>`;
 }
 
 // ============================================================
@@ -1683,6 +1683,31 @@ async function saveInlineMedia(unitId, idx){
   }
 }
 
+// يُطبَّق وقت العرض: يُخفي المقاطع التي حذفها المدرب، ويضيف زر الحذف في وضع المدرب
+function applyClipRules(html){
+  const hid = new Set((extraVideos||[]).filter(v=>v.kind==='hide').map(v=>v.url));
+  return html.replace(/<div class="(?:video-links|ig-links)">[\s\S]*?<\/ul><\/div>/g, box=>{
+    box = box.replace(/<li data-clip="([^"]*)">([\s\S]*?)<\/li>/g, (m,url,inner)=>{
+      if(hid.has(url)) return '';
+      const btn = trainerUnlocked ? ` <button class="mini-del" title="حذف هذا المقطع من الموقع" onclick='hideStaticClip(${JSON.stringify(url).replace(/'/g,"&#39;")})'>🗑</button>` : '';
+      return `<li data-clip="${url}">${inner}${btn}</li>`;
+    });
+    return /<li/.test(box) ? box : '';
+  });
+}
+
+async function hideStaticClip(url){
+  if(!confirm('حذف هذا المقطع من الموقع لجميع المتدربين؟')) return;
+  try{
+    let h=0; for(const c of url){ h=(h*31+c.charCodeAt(0))|0; }
+    const data = await postVideo({ id:'hide-'+Math.abs(h), unitId:'', sectionIdx:0, title:'hidden', url, kind:'hide', deleted:false });
+    if(data.result!=='success'){ alert('تعذّر الحذف: '+(data.message||'')); return; }
+    await loadAllVideos();
+    UNITS.forEach(u=>{ const el=document.getElementById('page-'+u.id); if(el) el.remove(); });
+    rerenderCurrentUnit();
+  }catch(e){ console.error(e); alert('تعذّر الاتصال بملف الشيت.'); }
+}
+
 async function deleteInlineMedia(id){
   if(!confirm('حذف هذه الإضافة؟')) return;
   try{
@@ -1819,7 +1844,8 @@ function arabicOrdinal(n){
 }
 
 // ---------- بناء صفحة وحدة (عرض شرائح) ----------
-function renderUnit(u, idx){
+function renderUnit(u, idx){ return applyClipRules(renderUnitRaw(u, idx)); }
+function renderUnitRaw(u, idx){
   const prevUnit = UNITS[idx-1];
   const nextUnit = UNITS[idx+1];
   const total = u.sections.length;
