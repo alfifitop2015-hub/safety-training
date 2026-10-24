@@ -1907,9 +1907,8 @@ function goSlide(uid, i){
   slideState[uid].i = i;
   const idx = UNITS.findIndex(u=>u.id===uid);
   if(idx>-1){
+    // بدون تمرير تلقائي: تبقى الصفحة في مكانها وأنت تتحكم بالتمرير
     ensurePageDiv(uid, renderUnit(UNITS[idx], idx));
-    const card = document.getElementById('slidecard-'+uid);
-    if(card && typeof card.scrollIntoView === 'function') card.scrollIntoView({behavior:'smooth', block:'start'});
   }
 }
 
@@ -2978,7 +2977,10 @@ function ensurePageDiv(id, html){
     el.id = 'page-'+id;
     document.getElementById('pages').appendChild(el);
   }
+  // نحفظ موضع التمرير ونستعيده حتى لا تقفز الصفحة للأعلى عند إعادة الرسم (مزامنة الشيت، تنقّل الشرائح، حفظ إضافة)
+  const y = window.scrollY;
   el.innerHTML = html;
+  if(y>0) window.scrollTo({top:y, behavior:'instant'});
 }
 
 // ---------- التهيئة ----------
